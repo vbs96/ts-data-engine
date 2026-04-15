@@ -44,13 +44,20 @@ int main() {
     }
 
     std::cout<<"Ingestion phase took: "<<
-        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start) << "\n";
+        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start)
+    << "Generated: " << count << " market events"
+    << "\n";
 
     // Test query() implementation
-    auto start_query_date = year_month_day{floor<days>(system_clock::now())};
-    auto end_query_date = year_month_day{floor<days>(system_clock::now()) + days{1}};
-    auto query_value = tse.query("AAPL",sys_days{start_query_date}, sys_days{end_query_date});
+    auto start_query_date = system_clock::now();
+    auto end_query_date = system_clock::now() + days{1};
+    auto query_value = tse.query("AAPL",start_query_date, end_query_date);
 
+    auto total_query_time = duration_cast<std::chrono::milliseconds>(system_clock::now() - start_query_date);
+    std::cout<< "Total query time: " << total_query_time
+    << "; per event: " << duration_cast<nanoseconds>(total_query_time)/query_value.size()
+    << "; elements retrieved: " << query_value.size()
+    <<"\n";
 
     // Memory diagnostics
     print_memory_diag();
