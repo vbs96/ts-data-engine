@@ -15,6 +15,7 @@ public:
 
     MarketEvent create_market_event();
 
+    void start();
 private:
     class Impl;
     std::unique_ptr<Impl> pimpl_;

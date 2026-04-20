@@ -26,6 +26,8 @@ public:
     // Return all transactions on "symbol" from start to end time points.
     std::vector<MarketEvent> query(const std::string& symbol, time_point start_time, time_point end_time) const;
 
+    void start();
+
 private:
     std::vector<MarketEvent> data_;
 };
