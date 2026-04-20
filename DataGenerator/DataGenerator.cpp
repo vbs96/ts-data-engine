@@ -3,7 +3,12 @@
 //
 
 #include "DataGenerator.h"
+#include <iostream>
+#include <fstream>
 #include <random>
+#include <sys/socket.h>
+#include <netdb.h>
+#include <thread>
 
 class DataGenerator::Impl {
 public:
@@ -32,13 +37,13 @@ public:
 
     MarketEvent generate_market_event() {
         auto index = random_symbol_dist_(rng_);
-        return MarketEvent{
-            possible_symbols_[index].first,
-            generate_event_timestamp(),
-            random_trade_vol_dist_(rng_),
-            generate_price(index),
-            random_price_dist_(rng_) % 2 == 0 ? MarketEventType::Ask : MarketEventType::Bid
-        };
+        MarketEvent market_event;
+        strncpy(market_event.symbol,this->possible_symbols_[index].first.c_str(), possible_symbols_[index].first.size() + 1);
+        market_event.timestamp = generate_event_timestamp();
+        market_event.volume = random_trade_vol_dist_(rng_);
+        market_event.price = generate_price(index);
+        market_event.type = random_price_dist_(rng_) % 2 == 0 ? MarketEventType::Ask : MarketEventType::Bid;
+        return market_event;
     }
 
 private:
@@ -79,4 +84,56 @@ DataGenerator::~DataGenerator() = default;
 
 MarketEvent DataGenerator::create_market_event() {
     return pimpl_->generate_market_event();
+}
+
+void DataGenerator::start() {
+    using namespace std::literals::chrono_literals;
+
+    // Set up socket
+    int status;
+    struct addrinfo hints;
+    struct addrinfo *servinfo;
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_flags = AI_PASSIVE;
+
+    if ((status = getaddrinfo(NULL, "3499", &hints, &servinfo)) != 0) {
+        std::cout << "getaddrinfo() error: " << gai_strerror(status) << "\n";
+        exit(1);
+    }
+
+    int socket_fd = socket(servinfo->ai_family, servinfo->ai_socktype, servinfo->ai_protocol);
+    if (socket_fd == -1) {
+        std::cout << "socket() error. \n";
+        exit(1);
+    }
+
+    status = connect(socket_fd, servinfo->ai_addr, servinfo->ai_addrlen);
+    if (status == -1) {
+        std::cout << "connect() error. \n";
+        exit(1);
+    }
+
+    time_point start_timepoint = std::chrono::system_clock::now();
+    size_t count = 0;
+
+    while (std::chrono::system_clock::now() - start_timepoint <= 1s ) {
+        auto market_event = this->pimpl_->generate_market_event();
+        auto bytes_sent = send(socket_fd, &market_event, sizeof(market_event), 0);
+
+        count++;
+        if (bytes_sent != sizeof(market_event)) {
+            std::cout << "send() didn't sent all the content of msg. \n";
+            std::cout<< "Market events sent until now: " << count << ". Total bytes until now sent: "
+            << count * 32 << "\n";
+            exit(1);
+        }
+    }
+
+    std::cout<< "Total market events sent in 1s: " << count
+    << ". Total MB sent in 1s: " << count * 32 / (1024.0 * 1024.0) << "\n";
+
+    shutdown(socket_fd, 2);
+    freeaddrinfo(servinfo);
 }
